@@ -3,9 +3,12 @@
 import argparse
 import sys
 
+from usbip_toolkit.demo import DemoServer
+
 
 def real_main(args):
-    pass
+    demo = DemoServer()
+    demo.serve()
 
 
 def main() -> int:
