@@ -2,6 +2,8 @@ from itertools import count
 
 import trio
 
+from usbip_toolkit.proto import *
+
 
 class DemoServer:
     def __init__(self, port: int = 3240):
