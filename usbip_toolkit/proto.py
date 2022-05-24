@@ -2,7 +2,7 @@ from construct import *
 
 # fmt: off
 
-USBIP_VERSION_NUM = 1
+USBIP_VERSION_NUM = 0x0111
 
 SYSFS_PATH_MAX    = 256
 SYSFS_BUS_ID_SIZE = 32
@@ -34,8 +34,21 @@ BusID             = PaddedString(SYSFS_BUS_ID_SIZE, "utf8")
 USBIPVersion      = "version" / Const(USBIP_VERSION_NUM, Int16ub)
 USBIPStatus       = "status" / Int32ub
 
+UBSIPCode = Enum(Int16ub,
+    REQ_DEVINFO  = OP_REQ_DEVLIST,
+    REP_DEVINFO  = OP_REP_DEVINFO,
+    REQ_IMPORT   = OP_REQ_IMPORT,
+    REP_IMPORT   = OP_REP_IMPORT,
+    REQ_EXPORT   = OP_REQ_EXPORT,
+    REP_EXPORT   = OP_REP_EXPORT,
+    REQ_UNEXPORT = OP_REQ_UNEXPORT,
+    REP_UNEXPORT = OP_REP_UNEXPORT,
+    REQ_DEVLIST  = OP_REQ_DEVLIST,
+    REP_DEVLIS   = OP_REP_DEVLIST
+)
+
 def Code(code):
-    return Const(code, Int16ub)
+    return Const(code, UBSIPCode)
 
 def Hdr(code):
     return (
@@ -74,8 +87,7 @@ OpCommon = Struct(
     "status" / Int32ub
 )
 
-OpDevInfoRequest = Struct(
-    *Hdr(OP_REQ_DEVINFO),
+OpDevInfoRequestBody = Struct(
     "busid" / BusID
 )
 
@@ -85,8 +97,7 @@ OpDevInfoReply = Struct(
     "uinf" / USBInterface[this.udev.bNumInterfaces]
 )
 
-OpImportRequest = Struct(
-    *Hdr(OP_REQ_IMPORT),
+OpImportRequestBody = Struct(
     "busid" / BusID
 )
 
@@ -95,8 +106,7 @@ OpImportReply = Struct(
     "udev" / USBDevice
 )
 
-OpExportRequest = Struct(
-    *Hdr(OP_REQ_EXPORT),
+OpExportRequestBody = Struct(
     "udev" / USBDevice
 )
 
@@ -105,9 +115,8 @@ OpExportReply = Struct(
     "returncode" / Int32ub
 )
 
-OpUnexportRequest = Struct(
-    *Hdr(OP_REQ_UNEXPORT),
-    "udev" / USBDevice
+OpUnexportRequestBody = Struct(
+    "udev" / USBDevice,
 )
 
 OpUnexportReply = Struct(
@@ -115,9 +124,8 @@ OpUnexportReply = Struct(
     "returncode" / Int32ub
 )
 
-OpDevListRequest = Struct(
-    *Hdr(OP_REQ_DEVLIST),
-)
+
+OpDevListRequestBody = Struct()
 
 OpDevListReplyExtra = Struct(
     "udev" / USBDevice,
@@ -128,6 +136,19 @@ OpDevListReply = Struct(
     *Hdr(OP_REP_DEVLIST),
     "ndev" / Int32ub,
     "devs" / OpDevListReplyExtra[this.ndev]
+)
+
+OpRequest = Struct(
+    USBIPVersion,
+    "code" / UBSIPCode,
+    "status" / Int32ub,
+    "body" / Switch(this.code, {
+        UBSIPCode.REQ_DEVINFO:  OpDevInfoRequestBody,
+        UBSIPCode.REQ_IMPORT:   OpImportRequestBody,
+        UBSIPCode.REQ_EXPORT:   OpExportRequestBody,
+        UBSIPCode.REQ_UNEXPORT: OpUnexportRequestBody,
+        UBSIPCode.REQ_DEVLIST:  OpDevListRequestBody,
+    })
 )
 
 # fmt: on
