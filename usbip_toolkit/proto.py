@@ -44,7 +44,7 @@ UBSIPCode = Enum(Int16ub,
     REQ_UNEXPORT = OP_REQ_UNEXPORT,
     REP_UNEXPORT = OP_REP_UNEXPORT,
     REQ_DEVLIST  = OP_REQ_DEVLIST,
-    REP_DEVLIS   = OP_REP_DEVLIST
+    REP_DEVLIST  = OP_REP_DEVLIST
 )
 
 def Code(code):
@@ -92,7 +92,7 @@ OpDevInfoRequestBody = Struct(
 )
 
 OpDevInfoReply = Struct(
-    *Hdr(OP_REP_DEVINFO),
+    *Hdr(UBSIPCode.REP_DEVINFO),
     "udev" / USBDevice,
     "uinf" / USBInterface[this.udev.bNumInterfaces]
 )
@@ -102,7 +102,7 @@ OpImportRequestBody = Struct(
 )
 
 OpImportReply = Struct(
-    *Hdr(OP_REP_IMPORT),
+    *Hdr(UBSIPCode.REP_IMPORT),
     "udev" / USBDevice
 )
 
@@ -111,7 +111,7 @@ OpExportRequestBody = Struct(
 )
 
 OpExportReply = Struct(
-    *Hdr(OP_REP_EXPORT),
+    *Hdr(UBSIPCode.REP_EXPORT),
     "returncode" / Int32ub
 )
 
@@ -120,7 +120,7 @@ OpUnexportRequestBody = Struct(
 )
 
 OpUnexportReply = Struct(
-    *Hdr(OP_REQ_UNEXPORT),
+    *Hdr(UBSIPCode.REQ_UNEXPORT),
     "returncode" / Int32ub
 )
 
@@ -133,7 +133,7 @@ OpDevListReplyExtra = Struct(
 )
 
 OpDevListReply = Struct(
-    *Hdr(OP_REP_DEVLIST),
+    *Hdr(UBSIPCode.REP_DEVLIST),
     "ndev" / Int32ub,
     "devs" / OpDevListReplyExtra[this.ndev]
 )
@@ -149,6 +149,45 @@ OpRequest = Struct(
         UBSIPCode.REQ_UNEXPORT: OpUnexportRequestBody,
         UBSIPCode.REQ_DEVLIST:  OpDevListRequestBody,
     })
+)
+
+
+
+CommonHdr = (
+    "command" / Int32ub,
+    "seqnum" / Int32ub,
+    "devid" / Int32ub,
+    "direction" / Int32ub,
+    "ep" / Int32ub
+)
+
+CmdSubmitHdr = Struct(
+    *CommonHdr,
+    "transfer_flags" / Int32ub,
+    "transfer_buffer_lenth" / Int32sb,
+    "start_frame" / Int32sb,
+    "number_of_packets" / Int32sb,
+    "interval" / Int32sb,
+    "setup" / Bytes(8)
+)
+
+RetSubmitHdr = Struct(
+    *CommonHdr,
+    "status" / Int32sb,
+    "actual_length" / Int32sb,
+    "start_frame" / Int32sb,
+    "number_of_packets" / Int32sb,
+    "error_count" / Int32sb
+)
+
+CmdUnlinkHdr = Struct(
+    *CommonHdr,
+    "seqnum" / Int32ub
+)
+
+RetUnlinkHdr = Struct(
+    *CommonHdr,
+    "status" / Int32sb
 )
 
 # fmt: on
