@@ -1,4 +1,21 @@
+from enum import IntEnum
+
 from usbip_toolkit.util import bit_reverse
+
+
+class PID(IntEnum):
+    TOK_OUT = 0b001
+    TOK_IN = 0b1001
+    TOK_SOF = 0b0101
+    TOK_SETUP = 0b1101
+    DAT_DATA0 = 0b0011
+    DAT_DATA1 = 0b1011
+    DAT_DATA2 = 0b0111
+    DAT_MDATA = 0b1111
+    SPC_PRE = 0b1100
+    SPC_ERR = 0b1100
+    SPC_SPLIT = 0b1000
+    SPC_PING = 0b0100
 
 
 def crc5(val, nbits):
