@@ -13,7 +13,7 @@ class PID(IntEnum):
     DAT_DATA1 = 0b1011 # b
     DAT_DATA2 = 0b0111 # 7
     DAT_MDATA = 0b1111 # f
-    HND_AKC   = 0b0010 # 2
+    HND_ACK   = 0b0010 # 2
     HND_NACK  = 0b1010 # a
     HND_STALL = 0b1110 # e
     HND_NYET  = 0b0110 # 6
@@ -106,11 +106,21 @@ def crc16(buf):
         i = ((crc >> 8) ^ b) & 0xFF
         crc = ((crc << 8) & 0xFFFF) ^ _crc16_table[i]
     crc ^= 0xFFFF
-    crc = (_bitrev_table[crc >> 8] << 8) | _bitrev_table[crc & 0xFF]
+    # crc = (_bitrev_table[crc >> 8] << 8) | _bitrev_table[crc & 0xFF]
+    crc = bytes([_bitrev_table[crc & 0xFF], _bitrev_table[crc >> 8]])
     return crc
 
 
-def create_token_packet(pid, addr, endp):
+def pid_val(pid):
+    assert 0 <= pid <= 0xF
+    pid_byte = ((pid ^ 0xF) << 4) | pid
+
+
+def pid_byte(pid):
+    pid_byte = bytes([pid_val(pid)])
+
+
+def token_packet(pid, addr, endp):
     assert 0 <= pid <= 0xF
     pid_byte = ((pid ^ 0xF) << 4) | pid
     assert 0 <= addr <= 0x7F
@@ -120,3 +130,40 @@ def create_token_packet(pid, addr, endp):
     crc_val = crc5(val4crc, 11)
     last_byte = (bit_reverse(crc_val, 5) << 3) | (endp >> 1)
     return bytes([pid_byte, mid_byte, last_byte])
+
+
+def out_packet(addr, endp):
+    return token_packet(PID.TOK_OUT, addr, endp)
+
+
+def in_packet(addr, endp):
+    return token_packet(PID.TOK_IN, addr, endp)
+
+
+def sof_packet(addr, endp):
+    return token_packet(PID.TOK_SOF, addr, endp)
+
+
+def setup_packet(addr, endp):
+    return token_packet(PID.TOK_SETUP, addr, endp)
+
+
+def data_packet(buf, odd=False):
+    pb = pid_byte(PID.DAT_DATA1 if odd else PID.DAT_DATA0)
+    return pb + buf + crc16(buf)
+
+
+def ack_packet():
+    return pid_byte(PID.HND_ACK)
+
+
+def nack_packet():
+    return pid_byte(PID.HND_NACK)
+
+
+def stall_packet():
+    return pid_byte(PID.HND_STALL)
+
+
+def nyet_packet():
+    return pid_byte(PID.HND_NYET)
