@@ -97,7 +97,6 @@ _bitrev_table = [
 def crc16(buf):
     crc = 0xFFFF
     for b in buf:
-        # b = bit_reverse(b, 8)
         i = ((crc >> 8) ^ b) & 0xFF
         crc = ((crc << 8) & 0xFFFF) ^ _crc16_table[i]
     crc ^= 0xFFFF
