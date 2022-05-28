@@ -106,8 +106,20 @@ def crc16(buf):
         i = ((crc >> 8) ^ b) & 0xFF
         crc = ((crc << 8) & 0xFFFF) ^ _crc16_table[i]
     crc ^= 0xFFFF
-    # crc = (_bitrev_table[crc >> 8] << 8) | _bitrev_table[crc & 0xFF]
-    crc = bytes([_bitrev_table[crc & 0xFF], _bitrev_table[crc >> 8]])
+    # crc = (bit_reverse(crc >> 8, 8) << 8) | bit_reverse(crc & 0xff, 8)
+    crc = (_bitrev_table[crc >> 8] << 8) | _bitrev_table[crc & 0xFF]
+    # crc = bytes([_bitrev_table[crc & 0xFF], _bitrev_table[crc >> 8]])
+    return crc
+
+
+def crc162(buf):
+    crc = 0xFFFF
+    for b in buf:
+        i = ((crc >> 8) ^ b) & 0xFF
+        crc = ((crc << 8) & 0xFFFF) ^ _crc16_table[i]
+    crc ^= 0xFFFF
+    crc = (_bitrev_table[crc >> 8] << 8) | _bitrev_table[crc & 0xFF]
+    # crc = bytes([_bitrev_table[crc & 0xFF], _bitrev_table[crc >> 8]])
     return crc
 
 
@@ -117,7 +129,7 @@ def pid_val(pid):
 
 
 def pid_byte(pid):
-    pid_byte = bytes([pid_val(pid)])
+    return bytes([pid_val(pid)])
 
 
 def token_addr_packet(pid, addr, endp):
@@ -153,7 +165,8 @@ def setup_packet(addr, endp):
 
 def data_packet(buf, odd=False):
     pb = pid_byte(PID.DAT_DATA1 if odd else PID.DAT_DATA0)
-    return pb + buf + crc16(buf)
+    print(f"pb: {pb.hex()}")
+    return (pb + buf + crc16(buf)), not odd
 
 
 def ack_packet():
