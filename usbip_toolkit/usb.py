@@ -113,39 +113,42 @@ def crc16(buf):
 
 def pid_val(pid):
     assert 0 <= pid <= 0xF
-    pid_byte = ((pid ^ 0xF) << 4) | pid
+    return ((pid ^ 0xF) << 4) | pid
 
 
 def pid_byte(pid):
     pid_byte = bytes([pid_val(pid)])
 
 
-def token_packet(pid, addr, endp):
-    assert 0 <= pid <= 0xF
-    pid_byte = ((pid ^ 0xF) << 4) | pid
+def token_addr_packet(pid, addr, endp):
     assert 0 <= addr <= 0x7F
     assert 0 <= endp <= 0xF
     mid_byte = ((endp & 1) << 7) | addr
     val4crc = bit_reverse((endp << 7) | addr, 11)
     crc_val = crc5(val4crc, 11)
     last_byte = (bit_reverse(crc_val, 5) << 3) | (endp >> 1)
-    return bytes([pid_byte, mid_byte, last_byte])
+    return bytes([pid_val(pid), mid_byte, last_byte])
 
 
 def out_packet(addr, endp):
-    return token_packet(PID.TOK_OUT, addr, endp)
+    return token_addr_packet(PID.TOK_OUT, addr, endp)
 
 
 def in_packet(addr, endp):
-    return token_packet(PID.TOK_IN, addr, endp)
+    return token_addr_packet(PID.TOK_IN, addr, endp)
 
 
-def sof_packet(addr, endp):
-    return token_packet(PID.TOK_SOF, addr, endp)
+def sof_packet(num):
+    assert 0 <= num < (1 << 11)
+    mid_byte = num & 0xFF
+    val4crc = bit_reverse(num, 11)
+    crc_val = crc5(val4crc, 11)
+    last_byte = (bit_reverse(crc_val, 5) << 3) | (num >> 8)
+    return bytes([pid_val(PID.TOK_SOF), mid_byte, last_byte])
 
 
 def setup_packet(addr, endp):
-    return token_packet(PID.TOK_SETUP, addr, endp)
+    return token_addr_packet(PID.TOK_SETUP, addr, endp)
 
 
 def data_packet(buf, odd=False):
