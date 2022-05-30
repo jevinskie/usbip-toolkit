@@ -57,6 +57,17 @@ class Req(IntEnum):
     SYNCH_FRAME       = 0x0C
     SET_SEL           = 0x30
     SET_ISOCH_DELAY   = 0x31
+
+
+class DescType(IntEnum):
+    DEVICE           = 0x0100
+    CONFIGURATION    = 0x0200
+    STRING           = 0x0300
+    INTERFACE        = 0x0400
+    ENDPOINT         = 0x0500
+    DEVICE_QUALIFIER = 0x0600
+    OTHER_SPEED      = 0x0700
+
 # fmt: on
 
 
