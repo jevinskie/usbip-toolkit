@@ -24,7 +24,7 @@ class PID(IntEnum):
     SPC_PING  = 0b0100 # 4
 
 
-class Direction(IntEnum):
+class Dir(IntEnum):
     OUT = 0x00
     IN  = 0x80
 
@@ -36,14 +36,14 @@ class Type(IntEnum):
     RESERVED = 3
 
 
-class Recipient(IntEnum):
+class Recip(IntEnum):
     DEVICE    = 0
     INTERFACE = 1
     ENDPOINT  = 2
     OTHER     = 3
 
 
-class Request(IntEnum):
+class Req(IntEnum):
     GET_STATUS        = 0x00
     CLEAR_FEATURE     = 0x01
     SET_FEATURE       = 0x03
@@ -97,12 +97,12 @@ def pid_byte(pid):
     return bytes([pid_val(pid)])
 
 
-def bmRequestType_val(direction, ty, recipient):
-    return direction | (ty << 5) | recipient
+def bmRequestType_val(recip, ty, direction):
+    return direction | (ty << 5) | recip
 
 
-def bmRequestType_byte(direction, ty, recipient):
-    return bytes([bmRequestType_val(direction, ty, recipient)])
+def bmRequestType_byte(recip, ty, direction):
+    return bytes([bmRequestType_val(direction, ty, recip)])
 
 
 def token_addr_packet(pid, addr, endp):
@@ -157,9 +157,9 @@ def nyet_packet():
     return pid_byte(PID.HND_NYET)
 
 
-def setup_data_packet(recipient, req, val, idx, sz, ty=Type.STANDARD):
+def setup_data_packet(recip, direction, req, val, idx, sz, ty=Type.STANDARD):
     buf = (
-        bmRequestType_byte(recipient, ty, Direction.OUT)
+        bmRequestType_byte(recip, ty, direction)
         + bytes([req])
         + val.to_bytes(2, "little")
         + idx.to_bytes(2, "little")
