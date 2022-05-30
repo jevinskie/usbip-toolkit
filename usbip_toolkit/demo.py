@@ -49,7 +49,8 @@ class DemoServer:
                             }
                         )
                 else:
-                    cmd = CmdSubmitHdr.parse(data)
+                    # cmd = CmdSubmitHdr.parse(data)
+                    cmd = USBIPCommand.parse(data)
                     print(f"cmd: {cmd}")
                     smsg = bytes(1)
                     print(f"smsg: {smsg.hex()}")

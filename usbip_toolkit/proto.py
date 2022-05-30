@@ -151,55 +151,89 @@ OpRequest = Struct(
     })
 )
 
-CMD_SUBMIT = 1
-CMD_UNLINK = 2
-RET_SUBMIT = 3
-RET_UNLINK = 4
-
+UBSIPCommandEnum = Enum(Int32ub,
+    CMD_SUBMIT = 1,
+    CMD_UNLINK = 2,
+    RET_SUBMIT = 3,
+    RET_UNLINK = 4
+)
 
 def CommonHdr(cmd):
     return (
-        "command" / Const(cmd, Int32ub),
+        "command" / Const(cmd, UBSIPCommandEnum),
         "seqnum" / Int32ub,
         "devid" / Int32ub,
         "direction" / Int32ub,
         "ep" / Int32ub
     )
 
-CmdSubmitHdr = Struct(
-    *CommonHdr(CMD_SUBMIT),
+
+
+CmdSubmitHdrBody = Struct(
     "transfer_flags" / Int32ub,
-    "transfer_buffer_lenth" / Int32sb,
+    "transfer_buffer_length" / Int32sb,
     "start_frame" / Const(0, Int32sb), # ISO not supported
     "number_of_packets" / Const(0, Int32sb), # ISO not supported
     "interval" / Int32sb,
     "setup" / Bytes(8),
-    "transfer_buffer" / Bytes(this.transfer_buffer_length),
+    "transfer_buffer" / Bytes(this.transfer_buffer_length * (this._.direction ^ 1)),
     # iso_packet_descriptor not used/supported
 )
 
-RetSubmitHdr = Struct(
-    *CommonHdr(RET_SUBMIT),
+CmdSubmitHdr = Struct(
+    *CommonHdr(UBSIPCommandEnum.CMD_SUBMIT),
+    "body" / CmdSubmitHdrBody
+)
+
+RetSubmitHdrBody = Struct(
     "status" / Int32sb,
     "actual_length" / Int32sb,
     "start_frame" / Const(0, Int32sb), # ISO not supported
     "number_of_packets" / Const(0, Int32sb), # ISO not supported
     "error_count" / Int32sb,
     Padding(8),
-    "transfer_buffer" / Bytes(this.actual_length * this.direction),
+    "transfer_buffer" / Bytes(this.actual_length * this._.direction),
     # iso_packet_descriptor not used/supported
 )
 
-CmdUnlinkHdr = Struct(
-    *CommonHdr(CMD_UNLINK),
+RetSubmitHdr = Struct(
+    *CommonHdr(UBSIPCommandEnum.RET_SUBMIT),
+    "body" / RetSubmitHdrBody
+)
+
+CmdUnlinkHdrBody = Struct(
     "seqnum" / Int32ub,
     Padding(24)
 )
 
-RetUnlinkHdr = Struct(
-    *CommonHdr(CMD_SUBMIT),
+CmdUnlinkHdr = Struct(
+    *CommonHdr(UBSIPCommandEnum.CMD_UNLINK),
+    "body" / CmdUnlinkHdrBody
+)
+
+
+RetUnlinkHdrBody = Struct(
     "status" / Int32sb,
     Padding(24)
+)
+
+RetUnlinkHdr = Struct(
+    *CommonHdr(UBSIPCommandEnum.CMD_SUBMIT),
+    "body" / RetUnlinkHdrBody
+)
+
+USBIPCommand = Struct(
+    "command" / UBSIPCommandEnum,
+    "seqnum" / Int32ub,
+    "devid" / Int32ub,
+    "direction" / Int32ub,
+    "ep" / Int32ub,
+    "body" / Switch(this.command, {
+        UBSIPCommandEnum.CMD_SUBMIT: CmdSubmitHdrBody,
+        UBSIPCommandEnum.RET_SUBMIT: RetSubmitHdrBody,
+        UBSIPCommandEnum.CMD_UNLINK: CmdUnlinkHdrBody,
+        UBSIPCommandEnum.RET_UNLINK: RetUnlinkHdrBody,
+    })
 )
 
 # fmt: on
