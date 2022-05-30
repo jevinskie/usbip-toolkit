@@ -1,5 +1,8 @@
 from enum import IntEnum
 
+from pyusb.control import *
+from pyusb.util import *
+
 from usbip_toolkit.util import bit_reverse
 
 
@@ -128,11 +131,11 @@ def token_addr_packet(pid, addr, endp):
     return bytes([pid_val(pid), mid_byte, last_byte])
 
 
-def out_packet(addr, endp):
+def out_token_packet(addr, endp):
     return token_addr_packet(PID.TOK_OUT, addr, endp)
 
 
-def in_packet(addr, endp):
+def in_token_packet(addr, endp):
     return token_addr_packet(PID.TOK_IN, addr, endp)
 
 
@@ -145,14 +148,13 @@ def sof_packet(num):
     return bytes([pid_val(PID.TOK_SOF), mid_byte, last_byte])
 
 
-def setup_packet(addr, endp):
+def setup_token_packet(addr, endp):
     return token_addr_packet(PID.TOK_SETUP, addr, endp)
 
 
 def data_packet(buf, odd=False):
     pb = pid_byte(PID.DAT_DATA1 if odd else PID.DAT_DATA0)
-    print(f"pb: {pb.hex()}")
-    return (pb + buf + crc16(buf)), not odd
+    return pb + buf + crc16(buf)
 
 
 def ack_packet():
