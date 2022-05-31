@@ -1,9 +1,22 @@
 from itertools import count
 
+import aiostream
 import trio
 
 from usbip_toolkit.proto import *
 from usbip_toolkit.util import LengthPrefixedTransceiver
+
+
+class UTMIServerCombiner:
+    def __init__(self, framed_server_stream, host_to_device_rx):
+        self.framed_server_stream = framed_server_stream
+        self.host_to_device_rx = host_to_device_rx
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        pass
 
 
 class DemoServer:
@@ -21,6 +34,8 @@ class DemoServer:
         # await trio.serve_tcp(self.demo_server, self.port)
         print("serve_async begin")
         async with trio.open_nursery() as nursery:
+            self.host_to_device_tx, self.host_to_device_rx = trio.open_memory_channel(0)
+            self.device_to_host_tx, self.device_to_host_rx = trio.open_memory_channel(0)
             nursery.start_soon(self.serve_usbip_async)
             nursery.start_soon(self.serve_utmi_async)
         print("serve_async end")
@@ -32,8 +47,9 @@ class DemoServer:
         ident = next(self.counter)
         print(f"utmi_server {ident}: started")
         framed_server_stream = LengthPrefixedTransceiver(server_stream)
+        combo = aiostream.stream.map(framed_server_stream, lambda x: x, self.host_to_device_rx)
         try:
-            async for data in framed_server_stream:
+            async for data in combo:
                 print(f"utmi_server {ident}: received data {data.hex()}")
 
                 smsg = b"\x00"
