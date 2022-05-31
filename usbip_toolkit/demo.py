@@ -3,7 +3,7 @@ from itertools import count
 import trio
 
 from usbip_toolkit.proto import *
-from usbip_toolkit.util import LengthPrefixedReceiver
+from usbip_toolkit.util import LengthPrefixedTransceiver
 
 
 class DemoServer:
@@ -31,13 +31,13 @@ class DemoServer:
     async def utmi_server(self, server_stream):
         ident = next(self.counter)
         print(f"utmi_server {ident}: started")
-        framed_server_stream = LengthPrefixedReceiver(server_stream)
+        framed_server_stream = LengthPrefixedTransceiver(server_stream)
         try:
             async for data in framed_server_stream:
                 print(f"utmi_server {ident}: received data {data.hex()}")
 
                 smsg = b"\x00"
-                await server_stream.send_all(smsg)
+                await framed_server_stream.send(smsg)
             print(f"utmi_server {ident}: connection closed")
         except Exception as exc:
             print(f"utmi_server {ident}: crashed: {exc!r}")

@@ -12,11 +12,7 @@ def bit_reverse(val, nbits):
 
 
 class ExactReceiver:
-    def __init__(
-        self,
-        stream: trio.abc.ReceiveStream,
-        max_frame_length: int = 16384,
-    ):
+    def __init__(self, stream: trio.abc.ReceiveStream, max_frame_length: int = 16384):
         assert not stream or isinstance(stream, trio.abc.ReceiveStream)
 
         self.stream = stream
@@ -51,10 +47,18 @@ class ExactReceiver:
         return frame
 
 
-class LengthPrefixedReceiver(ExactReceiver):
+class LengthPrefixedTransceiver(ExactReceiver):
     async def receive(self):
         nbytes = int.from_bytes(await self.receive_exactly(4), "big")
         return await self.receive_exactly(nbytes)
+
+    async def send(self, bufs):
+        if not isinstance(bufs, list):
+            bufs = [bufs]
+        obuf = b""
+        for buf in bufs:
+            obuf += len(buf).to_bytes(4, "big") + buf
+        await self.stream.send_all(obuf)
 
     def __aiter__(self):
         return self
