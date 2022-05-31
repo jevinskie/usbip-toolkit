@@ -3,16 +3,16 @@
 import argparse
 import sys
 
-from usbip_toolkit.demo import DemoServer
+from usbip_toolkit.sim_bridge import USBIPSimBridgeServer
 
 
 def real_main(args):
-    demo = DemoServer()
-    demo.serve()
+    bridge = USBIPSimBridgeServer()
+    bridge.serve()
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="usbiptk-demo")
+    parser = argparse.ArgumentParser(description="usbiptk-sim-bridge")
     args = parser.parse_args()
     real_main(args)
     return 0

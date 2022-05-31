@@ -1,1 +1,1 @@
-from usbip_toolkit.tools import usbiptk_demo
+from usbip_toolkit.tools import usbiptk_sim_bridge
