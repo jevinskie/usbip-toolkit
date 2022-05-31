@@ -6,6 +6,24 @@ import reactivex as rx
 from reactivex import operators as ops
 
 from usbip_toolkit.proto import *
+from usbip_toolkit.util import get_tcp_server_socket
+
+
+class SimServer:
+    def __init__(self, port: int = 2443):
+        self.port = port
+        self.serv_sock = get_tcp_server_socket(port)
+
+    def wait_for_connection(self) -> socket.socket:
+        self.serv_sock.listen(1)
+        client_sock, _ = self.serv_sock.accept()
+        return client_sock
+
+
+class USBIPServer:
+    def __init__(self, port: int = 3240):
+        self.port = port
+        self.serv_sock = get_tcp_server_socket(port)
 
 
 class USBIPSimBridgeServer_rx:
@@ -13,10 +31,7 @@ class USBIPSimBridgeServer_rx:
         self.usbip_port = usbip_port
         self.sim_port = sim_port
         self.counter = count()
-        self.serv_sock = serv_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        serv_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        serv_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        serv_sock.bind(("localhost", sim_port))
+        self.serv_sock = serv_sock = get_tcp_server_socket(sim_port)
         serv_sock.listen(1)
         print("waiting for incomming connection")
         self.s, _ = serv_sock.accept()
