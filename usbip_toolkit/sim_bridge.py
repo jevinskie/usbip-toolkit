@@ -24,16 +24,15 @@ class USBIPSimBridgeServer:
         source = self.tcp_echo_server(proxy, loop)
         aio_scheduler = AsyncIOScheduler(loop=loop)
 
-        source.pipe(
-            ops.map(lambda i: i._replace(data="echo: {}".format(i.data))), ops.delay(5.0)
-        ).subscribe(proxy, scheduler=aio_scheduler)
+        source.pipe(ops.map(lambda i: i._replace(data="echo: {}".format(i.data)))).subscribe(
+            proxy, scheduler=aio_scheduler
+        )
 
         loop.run_forever()
         print("done")
         loop.close()
 
-    @staticmethod
-    def tcp_echo_server(sink, loop):
+    def tcp_echo_server(self, sink, loop):
         def on_subscribe(observer, scheduler):
             async def handle_echo(reader, writer):
                 print("new client connected")
