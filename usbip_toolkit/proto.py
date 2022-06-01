@@ -309,13 +309,13 @@ USBIPCommandReply = Struct(
 
 def read_usbip_packet(sock: socket.socket):
     buf = bytearray()
-    first_2bytes = sock.read(2)
+    first_2bytes = sock.recv(2)
     if not first_2bytes:
         return None
     buf += first_2bytes
     if first_2bytes == USBIPVersion.build(None):
         # OpCommonHdr
-        rest_op_cmn_hdr_buf = sock.read(OpCommonHdr.sizeof() - len(buf))
+        rest_op_cmn_hdr_buf = sock.recv(OpCommonHdr.sizeof() - len(buf))
         if not rest_op_cmn_hdr_buf:
             return None
         buf += rest_op_cmn_hdr_buf

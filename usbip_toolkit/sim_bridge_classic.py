@@ -83,7 +83,8 @@ class USBIPServer:
 
     def d2h_loop(self):
         while True:
-            pass
+            pkt = read_usbip_packet(self.client_sock)
+            print(f"pkt: {pkt}")
         print("usbip client closed socket")
 
     def h2d_loop(self):
@@ -101,10 +102,12 @@ class USBIPSimBridgeServer_classic:
         self.d2h_ip = Queue()
         self.h2d_ip = Queue()
         self.sim_server = SimServer(self.d2h_raw, self.h2d_raw, sim_port)
+        self.usbip_server = USBIPServer(self.d2h_ip, self.h2d_ip, usbip_port)
 
     def serve(self):
         print("server running")
         self.sim_server.serve()
+        self.usbip_server.serve()
         print("server done")
 
 
