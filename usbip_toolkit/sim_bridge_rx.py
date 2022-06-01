@@ -1,13 +1,15 @@
+import imp
 import os
 import socket
 import time
 from itertools import count
 from multiprocessing import pool
 
-import reactivex
 import reactivex as rx
+import reactivex.run as rxrun
 from reactivex import operators as ops
 from reactivex.scheduler import ThreadPoolScheduler
+from reactivex.scheduler.scheduler import Scheduler
 
 from usbip_toolkit.proto import *
 from usbip_toolkit.util import get_tcp_server_socket
@@ -28,7 +30,7 @@ class SimServer:
     def serve(self):
         print("starting server")
 
-        def rx_loop(observer, scheduler):
+        def rx_loop(observer: rx.Observer, scheduler: Scheduler):
             self.wait_for_connection()
             while True:
                 buf = self.client_sock.recv(1024)
@@ -39,6 +41,7 @@ class SimServer:
                     self.client_sock = None
                     break
             observer.on_completed()
+            observer.dispose()
 
         # self.source = rx.create(rx_loop).pipe(ops.observe_on(pool_scheduler))
         self.source = rx.create(rx_loop).pipe(ops.subscribe_on(pool_scheduler))
@@ -97,13 +100,14 @@ class SimServer:
         # combo = rx.merge(s2, s3)
         # combo_s = rx.create(combo)
 
-        foo = combo.subscribe(
+        combo.subscribe(
             on_next=lambda i: print("Received C {0}".format(i)),
             on_error=lambda e: print("Error Occurred: {0}".format(e)),
             on_completed=lambda: print("Done! C"),
         )
-        print(f"foo: {foo}")
-        combo.run()
+        # print(f"foo: {foo}")
+        # foo.dispose()
+        rxrun.run(combo)
 
         print("ended server")
 
@@ -125,3 +129,8 @@ class USBIPSimBridgeServer_rx:
         print("server running")
         self.sim_server.serve()
         print("server done")
+
+
+if __name__ == "__main__":
+    sim = USBIPSimBridgeServer_rx()
+    sim.serve()
