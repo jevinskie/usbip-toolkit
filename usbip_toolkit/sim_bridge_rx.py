@@ -2,6 +2,7 @@ import os
 import socket
 import time
 from itertools import count
+from multiprocessing import pool
 
 import reactivex
 import reactivex as rx
@@ -40,34 +41,71 @@ class SimServer:
             observer.on_completed()
 
         # self.source = rx.create(rx_loop).pipe(ops.observe_on(pool_scheduler))
-        self.source = rx.create(rx_loop).pipe(ops.subscribe_on(pool_scheduler))
+        self.source = rx.create(rx_loop).pipe(ops.observe_on(pool_scheduler))
 
-        foo = self.source.subscribe(
-            on_next=lambda i: print("Received A {0}".format(i)),
-            on_error=lambda e: print("Error Occurred: {0}".format(e)),
-            on_completed=lambda: print("Done! A"),
-        )
+        # foo = self.source.subscribe(
+        #     on_next=lambda i: print("Received A {0}".format(i)),
+        #     on_error=lambda e: print("Error Occurred: {0}".format(e)),
+        #     on_completed=lambda: print("Done! A"),
+        # )
 
         def push_five_strings(observer, scheduler):
+            # print("push 5 dstart")
+            # time.sleep(5)
+            # print("on a")
             observer.on_next("Alpha")
-            time.sleep(2)
+            # time.sleep(2)
+            # print("on b")
             observer.on_next("Beta")
-            time.sleep(2)
+            # time.sleep(2)
+            # print("on c")
             observer.on_next("Gamma")
-            time.sleep(2)
+            # time.sleep(2)
+            # print("on d")
             observer.on_next("Delta")
-            time.sleep(2)
+            # time.sleep(2)
+            # print("on e")
             observer.on_next("Epsilon")
-            time.sleep(2)
+            # time.sleep(2)
+            # print("push 5 completed posting")
             observer.on_completed()
+            # print("push 5 completed posted")
 
         source2 = rx.create(push_five_strings)
 
-        source2.pipe(ops.subscribe_on(pool_scheduler), ops.delay(3)).subscribe(
-            on_next=lambda i: print("Received B {0}".format(i)),
+        s2 = source2.pipe(ops.observe_on(pool_scheduler))
+
+        def push_five_other_strings(observer, scheduler):
+            observer.on_next("aardvark")
+            observer.on_next("babboon")
+            observer.on_next("gibbon")
+            observer.on_next("dingo")
+            observer.on_next("elephant")
+            observer.on_completed()
+
+        source3 = rx.create(push_five_other_strings)
+
+        s3 = source2.pipe(ops.observe_on(pool_scheduler), ops.delay(3))
+        # s2 = source2.pipe(ops.subscribe_on(pool_scheduler), ops.delay(3)).subscribe(
+        #     on_next=lambda i: print("Received B {0}".format(i)),
+        #     on_error=lambda e: print("Error Occurred: {0}".format(e)),
+        #     on_completed=lambda: print("Done! B"),
+        # )
+        # combo = rx.compose()
+        # combo = self.source.pipe(ops.merge(s2))
+        # combo = rx.merge(self.source, s2)
+        combo = rx.merge(s2, s3)
+        # combo_s = rx.create(combo)
+
+        foo = combo.subscribe(
+            on_next=lambda i: print("Received C {0}".format(i)),
             on_error=lambda e: print("Error Occurred: {0}".format(e)),
-            on_completed=lambda: print("Done! B"),
+            on_completed=lambda: print("Done! C"),
         )
+        print(f"foo: {foo}")
+        combo.run()
+
+        print("ended server")
 
 
 class USBIPServer:
