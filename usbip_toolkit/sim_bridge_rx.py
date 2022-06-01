@@ -41,7 +41,7 @@ class SimServer:
             observer.on_completed()
 
         # self.source = rx.create(rx_loop).pipe(ops.observe_on(pool_scheduler))
-        self.source = rx.create(rx_loop).pipe(ops.observe_on(pool_scheduler))
+        self.source = rx.create(rx_loop).pipe(ops.subscribe_on(pool_scheduler))
 
         # foo = self.source.subscribe(
         #     on_next=lambda i: print("Received A {0}".format(i)),
@@ -85,7 +85,7 @@ class SimServer:
 
         source3 = rx.create(push_five_other_strings)
 
-        s3 = source2.pipe(ops.observe_on(pool_scheduler), ops.delay(3))
+        s3 = source2.pipe(ops.subscribe_on(pool_scheduler), ops.delay(3))
         # s2 = source2.pipe(ops.subscribe_on(pool_scheduler), ops.delay(3)).subscribe(
         #     on_next=lambda i: print("Received B {0}".format(i)),
         #     on_error=lambda e: print("Error Occurred: {0}".format(e)),
@@ -93,8 +93,8 @@ class SimServer:
         # )
         # combo = rx.compose()
         # combo = self.source.pipe(ops.merge(s2))
-        # combo = rx.merge(self.source, s2)
-        combo = rx.merge(s2, s3)
+        combo = rx.merge(self.source, s2).pipe(ops.observe_on(pool_scheduler))
+        # combo = rx.merge(s2, s3)
         # combo_s = rx.create(combo)
 
         foo = combo.subscribe(
