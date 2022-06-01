@@ -85,6 +85,8 @@ class USBIPServer:
         while True:
             pkt = read_usbip_packet(self.client_sock)
             print(f"d2h_ip pkt: {pkt}")
+            if pkt is None:
+                break
             self.d2h_ip.put(pkt)
         print("usbip client closed socket")
 
