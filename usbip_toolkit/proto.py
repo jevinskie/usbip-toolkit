@@ -332,7 +332,7 @@ def read_usbip_packet(sock: socket.socket):
             return None
         buf += body_buf
         res = OpRequest.parse(buf)
-        rebuilt_sz = OpRequest.sizeof(**res)
+        rebuilt_buf = OpRequest.build(res)
     else:
         # USBIPCommand
         rest_cmd_cmn_hdr_buf = sock.recv(CmdCommonHdr.sizeof() - len(buf))
@@ -358,6 +358,6 @@ def read_usbip_packet(sock: socket.socket):
             return None
         buf += rest
         res = USBIPCommandRequest.parse(buf)
-        rebuilt_sz = USBIPCommandRequest.sizeof(**res)
-    assert len(buf) == rebuilt_sz
+        rebuilt_buf = USBIPCommandRequest.build(res)
+    assert buf == rebuilt_buf
     return res

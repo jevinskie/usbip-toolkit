@@ -84,7 +84,8 @@ class USBIPServer:
     def d2h_loop(self):
         while True:
             pkt = read_usbip_packet(self.client_sock)
-            print(f"pkt: {pkt}")
+            print(f"d2h_ip pkt: {pkt}")
+            self.d2h_ip.put(pkt)
         print("usbip client closed socket")
 
     def h2d_loop(self):
