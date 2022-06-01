@@ -1,3 +1,5 @@
+import socket
+
 from construct import *
 
 # fmt: off
@@ -81,11 +83,13 @@ USBInterface = Struct(
     Padding(1)
 )
 
-OpCommonHdr = (
+OpCommonHdrTuple = (
     USBIPVersion,
     "code" / UBSIPCode,
     USBIPStatus
 )
+
+OpCommonHdr = Struct(*OpCommonHdrTuple)
 
 OpDevInfoRequestBody = Struct(
     "busid" / BusID
@@ -179,7 +183,7 @@ OpDevListReply = Struct(
 )
 
 OpRequest = Struct(
-    *OpCommon,
+    *OpCommonHdrTuple,
     "body" / Switch(this.code, {
         UBSIPCode.REQ_DEVINFO:  OpDevInfoRequestBody,
         UBSIPCode.REQ_IMPORT:   OpImportRequestBody,
@@ -190,7 +194,7 @@ OpRequest = Struct(
 )
 
 OpReply = Struct(
-    *OpCommon,
+    *OpCommonHdrTuple,
     "body" / Switch(this.code, {
         UBSIPCode.REP_DEVINFO:  OpDevInfoReplyBody,
         UBSIPCode.REP_IMPORT:   OpImportReplyBody,
@@ -216,7 +220,7 @@ def CommonHdr(cmd):
         "ep" / Int32ub
     )
 
-CmdCommonHdr = Struct(
+CmdCommonHdrTuple = (
     "command" / UBSIPCommandEnum,
     "seqnum" / Int32ub,
     "devid" / Int32ub,
@@ -224,13 +228,21 @@ CmdCommonHdr = Struct(
     "ep" / Int32ub
 )
 
-CmdSubmitBody = Struct(
+CmdCommonHdr = Struct(*CmdCommonHdrTuple)
+
+CmdSubmitBodyPrefixTuple = (
     "transfer_flags" / Int32ub,
     "transfer_buffer_length" / Int32sb,
     "start_frame" / Const(0, Int32sb), # ISO not supported
     "number_of_packets" / Const(0, Int32sb), # ISO not supported
     "interval" / Int32sb,
     "setup" / Bytes(8),
+)
+
+CmdSubmitBodyPrefix = Struct(*CmdSubmitBodyPrefixTuple)
+
+CmdSubmitBody = Struct(
+    *CmdSubmitBodyPrefixTuple,
     "transfer_buffer" / Bytes(this.transfer_buffer_length * (this._.direction ^ 1)),
     # iso_packet_descriptor not used/supported
 )
@@ -276,16 +288,18 @@ RetUnlink = Struct(
     "body" / RetUnlinkBody
 )
 
-USBIPCommand = Struct(
-    "command" / UBSIPCommandEnum,
-    "seqnum" / Int32ub,
-    "devid" / Int32ub,
-    "direction" / Int32ub,
-    "ep" / Int32ub,
+USBIPCommandRequest = Struct(
+    *CmdCommonHdrTuple,
     "body" / Switch(this.command, {
         UBSIPCommandEnum.CMD_SUBMIT: CmdSubmitBody,
-        UBSIPCommandEnum.RET_SUBMIT: RetSubmitBody,
         UBSIPCommandEnum.CMD_UNLINK: CmdUnlinkBody,
+    })
+)
+
+USBIPCommandReply = Struct(
+    *CmdCommonHdrTuple,
+    "body" / Switch(this.command, {
+        UBSIPCommandEnum.RET_SUBMIT: RetSubmitBody,
         UBSIPCommandEnum.RET_UNLINK: RetUnlinkBody,
     })
 )
@@ -293,14 +307,57 @@ USBIPCommand = Struct(
 # fmt: on
 
 
-def read_usbip_packet(sock):
+def read_usbip_packet(sock: socket.socket):
     buf = bytearray()
     first_2bytes = sock.read(2)
     if not first_2bytes:
         return None
+    buf += first_2bytes
     if first_2bytes == USBIPVersion.build(None):
         # OpCommonHdr
-        pass
+        rest_op_cmn_hdr_buf = sock.read(OpCommonHdr.sizeof() - len(buf))
+        if not rest_op_cmn_hdr_buf:
+            return None
+        buf += rest_op_cmn_hdr_buf
+        cmn_hdr = OpCommonHdr.parse(buf)
+        body_ty = {
+            UBSIPCode.REQ_DEVINFO: OpDevInfoRequestBody,
+            UBSIPCode.REQ_IMPORT: OpImportRequestBody,
+            UBSIPCode.REQ_EXPORT: OpExportRequestBody,
+            UBSIPCode.REQ_UNEXPORT: OpUnexportRequestBody,
+            UBSIPCode.REQ_DEVLIST: OpDevListRequestBody,
+        }[cmn_hdr.code]
+        body_buf = sock.recv(body_ty.sizeof())
+        if not body_buf:
+            return None
+        buf += body_buf
+        res = OpRequest.parse(buf)
+        rebuilt_sz = OpRequest.sizeof(**res)
     else:
         # USBIPCommand
-        pass
+        rest_cmd_cmn_hdr_buf = sock.recv(CmdCommonHdr.sizeof() - len(buf))
+        if not rest_cmd_cmn_hdr_buf:
+            return None
+        buf += rest_cmd_cmn_hdr_buf
+        cmn_hdr = CmdCommonHdr.parse(buf)
+        body_ty = {
+            UBSIPCommandEnum.CMD_SUBMIT: CmdSubmitBody,
+            UBSIPCommandEnum.CMD_UNLINK: CmdUnlinkBody,
+        }
+        if body_ty is CmdSubmitBody:
+            tbuf = sock.recv(8)
+            if not tbuf:
+                return None
+            buf += tbuf
+            transfer_len = int.from_bytes(tbuf[4:], "big")
+            pkt_sz = CmdCommonHdr.sizeof() + CmdSubmitBodyPrefix.sizeof() + transfer_len
+        else:
+            pkt_sz = CmdCommonHdr.sizeof() + CmdUnlinkBody.sizeof()
+        rest = sock.recv(pkt_sz - len(buf))
+        if not rest:
+            return None
+        buf += rest
+        res = USBIPCommandRequest.parse(buf)
+        rebuilt_sz = USBIPCommandRequest.sizeof(**res)
+    assert len(buf) == rebuilt_sz
+    return res
