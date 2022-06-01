@@ -81,47 +81,83 @@ USBInterface = Struct(
     Padding(1)
 )
 
-OpCommon = Struct(
+OpCommonHdr = (
     USBIPVersion,
-    "code" / Int16ub,
-    "status" / Int32ub
+    "code" / UBSIPCode,
+    USBIPStatus
 )
 
 OpDevInfoRequestBody = Struct(
     "busid" / BusID
 )
 
-OpDevInfoReply = Struct(
-    *Hdr(UBSIPCode.REP_DEVINFO),
+OpDevInfoRequest = Struct(
+    *Hdr(UBSIPCode.REQ_DEVINFO),
+    "body" / OpDevInfoRequestBody
+)
+
+OpDevInfoReplyBody = Struct(
     "udev" / USBDevice,
     "uinf" / USBInterface[this.udev.bNumInterfaces]
+)
+
+OpDevInfoReply = Struct(
+    *Hdr(UBSIPCode.REP_DEVINFO),
+    "body" / OpDevInfoReplyBody
 )
 
 OpImportRequestBody = Struct(
     "busid" / BusID
 )
 
+OpImportRequest = Struct(
+    *Hdr(UBSIPCode.REQ_IMPORT),
+    "body" / OpImportRequestBody
+)
+
+OpImportReplyBody = Struct(
+    "udev" / USBDevice
+)
+
 OpImportReply = Struct(
     *Hdr(UBSIPCode.REP_IMPORT),
-    "udev" / USBDevice
+    "body" / OpImportReplyBody
 )
 
 OpExportRequestBody = Struct(
     "udev" / USBDevice
 )
 
+OpExportRequest = Struct(
+    *Hdr(UBSIPCode.REQ_EXPORT),
+    "body" / OpExportRequestBody
+)
+
+OpExportReplyBody = Struct(
+    "returncode" / Int32ub
+)
+
 OpExportReply = Struct(
     *Hdr(UBSIPCode.REP_EXPORT),
-    "returncode" / Int32ub
+    "body" / OpExportReplyBody
 )
 
 OpUnexportRequestBody = Struct(
     "udev" / USBDevice,
 )
 
-OpUnexportReply = Struct(
+OpUnexportRequest = Struct(
     *Hdr(UBSIPCode.REQ_UNEXPORT),
+    "body" / OpUnexportRequestBody,
+)
+
+OpUnexportReplyBody = Struct(
     "returncode" / Int32ub
+)
+
+OpUnexportReply = Struct(
+    *Hdr(UBSIPCode.REP_UNEXPORT),
+    "body" / OpUnexportReplyBody
 )
 
 
@@ -132,22 +168,35 @@ OpDevListReplyExtra = Struct(
     "uinf" / USBInterface[this.udev.bNumInterfaces]
 )
 
-OpDevListReply = Struct(
-    *Hdr(UBSIPCode.REP_DEVLIST),
+OpDevListReplyBody = Struct(
     "ndev" / Int32ub,
     "devs" / OpDevListReplyExtra[this.ndev]
 )
 
+OpDevListReply = Struct(
+    *Hdr(UBSIPCode.REP_DEVLIST),
+    "body" / OpDevListReplyBody
+)
+
 OpRequest = Struct(
-    USBIPVersion,
-    "code" / UBSIPCode,
-    "status" / Int32ub,
+    *OpCommon,
     "body" / Switch(this.code, {
         UBSIPCode.REQ_DEVINFO:  OpDevInfoRequestBody,
         UBSIPCode.REQ_IMPORT:   OpImportRequestBody,
         UBSIPCode.REQ_EXPORT:   OpExportRequestBody,
         UBSIPCode.REQ_UNEXPORT: OpUnexportRequestBody,
         UBSIPCode.REQ_DEVLIST:  OpDevListRequestBody,
+    })
+)
+
+OpReply = Struct(
+    *OpCommon,
+    "body" / Switch(this.code, {
+        UBSIPCode.REP_DEVINFO:  OpDevInfoReplyBody,
+        UBSIPCode.REP_IMPORT:   OpImportReplyBody,
+        UBSIPCode.REP_EXPORT:   OpExportReplyBody,
+        UBSIPCode.REP_UNEXPORT: OpUnexportReplyBody,
+        UBSIPCode.REP_DEVLIST:  OpDevListReplyBody,
     })
 )
 
@@ -167,9 +216,15 @@ def CommonHdr(cmd):
         "ep" / Int32ub
     )
 
+CmdCommonHdr = Struct(
+    "command" / UBSIPCommandEnum,
+    "seqnum" / Int32ub,
+    "devid" / Int32ub,
+    "direction" / Int32ub,
+    "ep" / Int32ub
+)
 
-
-CmdSubmitHdrBody = Struct(
+CmdSubmitBody = Struct(
     "transfer_flags" / Int32ub,
     "transfer_buffer_length" / Int32sb,
     "start_frame" / Const(0, Int32sb), # ISO not supported
@@ -180,12 +235,12 @@ CmdSubmitHdrBody = Struct(
     # iso_packet_descriptor not used/supported
 )
 
-CmdSubmitHdr = Struct(
+CmdSubmit = Struct(
     *CommonHdr(UBSIPCommandEnum.CMD_SUBMIT),
-    "body" / CmdSubmitHdrBody
+    "body" / CmdSubmitBody
 )
 
-RetSubmitHdrBody = Struct(
+RetSubmitBody = Struct(
     "status" / Int32sb,
     "actual_length" / Int32sb,
     "start_frame" / Const(0, Int32sb), # ISO not supported
@@ -196,30 +251,29 @@ RetSubmitHdrBody = Struct(
     # iso_packet_descriptor not used/supported
 )
 
-RetSubmitHdr = Struct(
+RetSubmit = Struct(
     *CommonHdr(UBSIPCommandEnum.RET_SUBMIT),
-    "body" / RetSubmitHdrBody
+    "body" / RetSubmitBody
 )
 
-CmdUnlinkHdrBody = Struct(
+CmdUnlinkBody = Struct(
     "seqnum" / Int32ub,
     Padding(24)
 )
 
-CmdUnlinkHdr = Struct(
+CmdUnlink = Struct(
     *CommonHdr(UBSIPCommandEnum.CMD_UNLINK),
-    "body" / CmdUnlinkHdrBody
+    "body" / CmdUnlinkBody
 )
 
-
-RetUnlinkHdrBody = Struct(
+RetUnlinkBody = Struct(
     "status" / Int32sb,
     Padding(24)
 )
 
-RetUnlinkHdr = Struct(
+RetUnlink = Struct(
     *CommonHdr(UBSIPCommandEnum.CMD_SUBMIT),
-    "body" / RetUnlinkHdrBody
+    "body" / RetUnlinkBody
 )
 
 USBIPCommand = Struct(
@@ -229,11 +283,24 @@ USBIPCommand = Struct(
     "direction" / Int32ub,
     "ep" / Int32ub,
     "body" / Switch(this.command, {
-        UBSIPCommandEnum.CMD_SUBMIT: CmdSubmitHdrBody,
-        UBSIPCommandEnum.RET_SUBMIT: RetSubmitHdrBody,
-        UBSIPCommandEnum.CMD_UNLINK: CmdUnlinkHdrBody,
-        UBSIPCommandEnum.RET_UNLINK: RetUnlinkHdrBody,
+        UBSIPCommandEnum.CMD_SUBMIT: CmdSubmitBody,
+        UBSIPCommandEnum.RET_SUBMIT: RetSubmitBody,
+        UBSIPCommandEnum.CMD_UNLINK: CmdUnlinkBody,
+        UBSIPCommandEnum.RET_UNLINK: RetUnlinkBody,
     })
 )
 
 # fmt: on
+
+
+def read_usbip_packet(sock):
+    buf = bytearray()
+    first_2bytes = sock.read(2)
+    if not first_2bytes:
+        return None
+    if first_2bytes == USBIPVersion.build(None):
+        # OpCommonHdr
+        pass
+    else:
+        # USBIPCommand
+        pass
