@@ -45,6 +45,7 @@ class SimServer:
             buf = self.client_sock.recv(nbytes)
             if not buf:
                 break
+            print(f"d2h_raw: {buf.hex(' ')}", flush=True)
             self.d2h_raw.put(buf)
         print("sim client closed socket")
 
@@ -57,6 +58,7 @@ class SimServer:
             for buf in bufs:
                 obuf += len(buf).to_bytes(4, "big")
                 obuf += buf
+                print(f"h2d_raw: {buf.hex(' ')}", flush=True)
             self.client_sock.send(obuf)
             self.h2d_raw.task_done()
 
@@ -115,6 +117,9 @@ class USBIPSimBridgeServer_classic:
         self.usbip_server = USBIPServer(self.d2h_ip, self.h2d_ip, usbip_port)
         self._frame_num = 0
         self._odd = False
+        self.busnum = 47
+        self.devnum = 43
+        self._setup_addr_done = False
 
     def serve(self):
         print("server running")
@@ -131,9 +136,9 @@ class USBIPSimBridgeServer_classic:
                             "body": {
                                 "udev": {
                                     "path": "",
-                                    "busid": "00-0.0",
-                                    "busnum": 0,
-                                    "devnum": 0,
+                                    "busid": f"{self.busnum}-{self.devnum}.0",
+                                    "busnum": self.busnum,
+                                    "devnum": self.devnum,
                                     "speed": 3,
                                     "idVendor": 0x16D0,
                                     "idProduct": 0x0F3B,
@@ -175,17 +180,54 @@ class USBIPSimBridgeServer_classic:
     def reset_odd(self):
         self._odd = False
 
+    def setup_addr(self):
+        setup_token = setup_token_packet(0, 0)
+        setup_data = setup_data_packet(Recip.DEVICE, Dir.OUT, Req.SET_ADDRESS, self.devnum, 0, 0)
+        self.reset_odd()
+        self.h2d_raw.put(
+            [sof_packet(self.frame_num), sof_packet(self.frame_num), setup_token, setup_data]
+        )
+        setup_resp = self.d2h_raw.get()
+        assert setup_resp == ack_packet()
+        in_token = in_token_packet(0, 0)
+        self.h2d_raw.put([sof_packet(self.frame_num), in_token])
+        resp_data = self.d2h_raw.get()
+        print(f"setup_addr resp_data: {resp_data.hex(' ')}")
+        self.h2d_raw.put(ack_packet())
+        self._setup_addr_done = True
+
     def send_urb_to_sim(self, urb):
         print(f"submit: {urb}")
-        sof_token = sof_packet(self.frame_num)
+        if not self._setup_addr_done:
+            self.setup_addr()
         if urb.ep == 0:
             if len(urb.body.transfer_buffer):
                 raise NotImplementedError("setup packet with extra data?")
-            setup_token = setup_token_packet(urb.devid, 0)
-            setup_data = data_packet(urb.body.setup, odd=False)
-            self.h2d_raw.put([setup_token, setup_data])
+            setup_token = setup_token_packet(urb.devid & 0xFFFF, 0)
+            # setup_data = data_packet(urb.body.setup, odd=False)
+            setup_data = data_packet(bytes.fromhex("80 06 00 01 00 00 12 00"), odd=False)
+            self.reset_odd()
+            self.h2d_raw.put([sof_packet(self.frame_num), setup_token, setup_data])
             setup_resp = self.d2h_raw.get()
-            print(f"setup_resp: {setup_resp}")
+            print(f"setup_resp: {setup_resp.hex()}")
+            if setup_resp != ack_packet():
+                smsg = RetSubmit.build(
+                    {**cmd_ret_hdr(urb), "body": {"status": 1, "error_count": 1}}
+                )
+                self.d2h_ip.put((smsg, USBIPServerPacketType.USBIPCommandReply))
+            else:
+                in_token = in_token_packet(urb.devid & 0xFFFF, 0)
+                print(f"in_token: {in_token.hex()}")
+                self.h2d_raw.put([sof_packet(self.frame_num), in_token])
+                setup_resp_data = self.d2h_raw.get()
+                print(f"setup_resp_data: {setup_resp_data.hex()}")
+                self.h2d_raw.put([ack_packet()])
+                smsg = RetSubmit.build(
+                    {
+                        **cmd_ret_hdr(urb),
+                        "body": {"status": 0, "error_count": 0, "transfer_buffer": setup_resp_data},
+                    }
+                )
         else:
             raise NotImplementedError
 

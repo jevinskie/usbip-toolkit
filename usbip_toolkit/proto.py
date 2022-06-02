@@ -259,7 +259,7 @@ CmdSubmit = Struct(
 
 RetSubmitBody = Struct(
     "status" / Int32sb,
-    "actual_length" / Int32sb,
+    "actual_length" / Rebuild(Int32sb, len_(this.transfer_buffer)),
     "start_frame" / Const(0, Int32sb), # ISO not supported
     "number_of_packets" / Const(0, Int32sb), # ISO not supported
     "error_count" / Int32sb,
@@ -378,3 +378,11 @@ def read_usbip_client_packet(sock: socket.socket):
         cpkt_ty = USBIPClientPacketType.USBIPCommandRequest
     assert buf == rebuilt_buf
     return res, cpkt_ty
+
+
+def cmd_ret_hdr(cmd_msg):
+    if cmd_msg.command == UBSIPCommandEnum.CMD_SUBMIT:
+        ret_cmd = UBSIPCommandEnum.RET_SUBMIT
+    elif cmd_msg.command == UBSIPCommandEnum.CMD_UNLINK:
+        ret_cmd = UBSIPCommandEnum.RET_UNLINK
+    return {"command": ret_cmd, "seqnum": cmd_msg.seqnum, "devid": 0, "direction": 0, "ep": 0}
