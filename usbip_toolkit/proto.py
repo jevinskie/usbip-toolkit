@@ -221,6 +221,10 @@ def CommonHdr(cmd):
         "ep" / Int32ub
     )
 
+class CmdDirection(enum.IntEnum):
+    D2H = 0
+    H2D = 1
+
 CmdCommonHdrTuple = (
     "command" / UBSIPCommandEnum,
     "seqnum" / Int32ub,
@@ -321,11 +325,9 @@ class USBIPServerPacketType(enum.IntEnum):
 def read_usbip_client_packet(sock: socket.socket):
     buf = bytearray()
     first_2bytes = sock.recv(2)
-    print(f"first2_bytes: {first_2bytes}")
     if not first_2bytes:
         return None, None
     buf += first_2bytes
-    print(f"buf: {buf.hex()}")
     if first_2bytes == USBIPVersion.build(None):
         # OpCommonHdr
         rest_op_cmn_hdr_buf = sock.recv(OpCommonHdr.sizeof() - len(buf))
