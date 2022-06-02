@@ -1,3 +1,4 @@
+import enum
 import socket
 
 from construct import *
@@ -307,17 +308,29 @@ USBIPCommandReply = Struct(
 # fmt: on
 
 
-def read_usbip_packet(sock: socket.socket):
+class USBIPClientPacketType(enum.IntEnum):
+    USBIPOperationRequest = enum.auto()
+    USBIPCommandRequest = enum.auto()
+
+
+class USBIPServerPacketType(enum.IntEnum):
+    USBIPOperationReply = enum.auto()
+    USBIPCommandReply = enum.auto()
+
+
+def read_usbip_client_packet(sock: socket.socket):
     buf = bytearray()
     first_2bytes = sock.recv(2)
+    print(f"first2_bytes: {first_2bytes}")
     if not first_2bytes:
-        return None
+        return None, None
     buf += first_2bytes
+    print(f"buf: {buf.hex()}")
     if first_2bytes == USBIPVersion.build(None):
         # OpCommonHdr
         rest_op_cmn_hdr_buf = sock.recv(OpCommonHdr.sizeof() - len(buf))
         if not rest_op_cmn_hdr_buf:
-            return None
+            return None, None
         buf += rest_op_cmn_hdr_buf
         cmn_hdr = OpCommonHdr.parse(buf)
         body_ty = {
@@ -329,15 +342,16 @@ def read_usbip_packet(sock: socket.socket):
         }[cmn_hdr.code]
         body_buf = sock.recv(body_ty.sizeof())
         if not body_buf:
-            return None
+            return None, None
         buf += body_buf
         res = OpRequest.parse(buf)
         rebuilt_buf = OpRequest.build(res)
+        cpkt_ty = USBIPClientPacketType.USBIPOperationRequest
     else:
         # USBIPCommand
         rest_cmd_cmn_hdr_buf = sock.recv(CmdCommonHdr.sizeof() - len(buf))
         if not rest_cmd_cmn_hdr_buf:
-            return None
+            return None, None
         buf += rest_cmd_cmn_hdr_buf
         cmn_hdr = CmdCommonHdr.parse(buf)
         body_ty = {
@@ -347,7 +361,7 @@ def read_usbip_packet(sock: socket.socket):
         if body_ty is CmdSubmitBody:
             tbuf = sock.recv(8)
             if not tbuf:
-                return None
+                return None, None
             buf += tbuf
             transfer_len = int.from_bytes(tbuf[4:], "big")
             pkt_sz = CmdCommonHdr.sizeof() + CmdSubmitBodyPrefix.sizeof() + transfer_len
@@ -355,9 +369,10 @@ def read_usbip_packet(sock: socket.socket):
             pkt_sz = CmdCommonHdr.sizeof() + CmdUnlinkBody.sizeof()
         rest = sock.recv(pkt_sz - len(buf))
         if not rest:
-            return None
+            return None, None
         buf += rest
         res = USBIPCommandRequest.parse(buf)
         rebuilt_buf = USBIPCommandRequest.build(res)
+        cpkt_ty = USBIPClientPacketType.USBIPCommandRequest
     assert buf == rebuilt_buf
-    return res
+    return res, cpkt_ty
