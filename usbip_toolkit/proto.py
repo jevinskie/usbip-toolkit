@@ -259,12 +259,12 @@ CmdSubmit = Struct(
 
 RetSubmitBody = Struct(
     "status" / Int32sb,
-    "actual_length" / Rebuild(Int32sb, len_(this.transfer_buffer)),
+    "actual_length" / Int32sb,
     "start_frame" / Const(0, Int32sb), # ISO not supported
     "number_of_packets" / Const(0, Int32sb), # ISO not supported
     "error_count" / Int32sb,
     Padding(8),
-    "transfer_buffer" / Bytes(this.actual_length * this._.direction),
+    "transfer_buffer" / Bytes(this.actual_length * (this._.direction ^ 1)),
     # iso_packet_descriptor not used/supported
 )
 

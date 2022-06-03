@@ -93,6 +93,7 @@ class USBIPServer:
     def d2h_loop(self):
         while True:
             buf, smsg_ty = self.d2h_ip.get()
+            print(f"smsg_ty: {smsg_ty}")
             self.client_sock.send(buf)
             self.d2h_ip.task_done()
 
@@ -101,6 +102,7 @@ class USBIPServer:
             cmsg, cmsg_ty = read_usbip_client_packet(self.client_sock)
             if cmsg is None:
                 break
+            print(f"cmsg_ty: {cmsg_ty} cmsg: {cmsg}")
             self.h2d_ip.put((cmsg, cmsg_ty))
         print("usbip client closed socket")
 
@@ -219,13 +221,19 @@ class USBIPSimBridgeServer_classic:
                 in_token = in_token_packet(urb.devid & 0xFFFF, 0)
                 print(f"in_token: {in_token.hex()}")
                 self.h2d_raw.put([sof_packet(self.frame_num), in_token])
-                setup_resp_data = self.d2h_raw.get()
-                print(f"setup_resp_data: {setup_resp_data.hex()}")
+                # fixme check PID and CRC
+                setup_resp_data = self.d2h_raw.get()[1:-2]
+                print(f"setup_resp_data: {setup_resp_data.hex(' ')}")
                 self.h2d_raw.put([ack_packet()])
                 smsg = RetSubmit.build(
                     {
                         **cmd_ret_hdr(urb),
-                        "body": {"status": 0, "error_count": 0, "transfer_buffer": setup_resp_data},
+                        "body": {
+                            "status": 0,
+                            "error_count": 0,
+                            "actual_length": len(setup_resp_data),
+                            "transfer_buffer": setup_resp_data,
+                        },
                     }
                 )
         else:
