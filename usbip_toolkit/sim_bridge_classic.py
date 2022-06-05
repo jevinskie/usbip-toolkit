@@ -205,7 +205,7 @@ class USBIPSimBridgeServer_classic:
         if urb.ep == 0:
             if len(urb.body.transfer_buffer):
                 raise NotImplementedError("setup packet with extra data?")
-            setup_token = setup_token_packet(urb.devid & 0xFFFF, 0)
+            setup_token = setup_token_packet(urb.devid_devnum, 0)
             setup_data = data_packet(urb.body.setup, odd=False)
             # setup_data = data_packet(bytes.fromhex("80 06 00 01 00 00 12 00"), odd=False)
             self.reset_odd()
@@ -220,7 +220,7 @@ class USBIPSimBridgeServer_classic:
                 self.d2h_ip.put((smsg, USBIPServerPacketType.USBIPCommandReply))
             else:
                 print("good good setup_resp, sending in token to device")
-                in_token = in_token_packet(urb.devid & 0xFFFF, 0)
+                in_token = in_token_packet(urb.devid_devnum, 0)
                 print(f"in_token: {in_token.hex()}")
                 self.h2d_raw.put([sof_packet(self.frame_num), in_token])
                 # fixme check PID and CRC
@@ -238,7 +238,9 @@ class USBIPSimBridgeServer_classic:
                         },
                     }
                 )
+                print("putting response in d2h_ip queue")
                 self.d2h_ip.put((smsg, USBIPServerPacketType.USBIPCommandReply))
+                print("done putting response in d2h_ip queue")
         else:
             raise NotImplementedError
 

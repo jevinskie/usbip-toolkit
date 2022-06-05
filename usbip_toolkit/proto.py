@@ -216,7 +216,8 @@ def CommonHdr(cmd):
     return (
         "command" / Const(cmd, UBSIPCommandEnum),
         "seqnum" / Int32ub,
-        "devid" / Int32ub,
+        "devid_busnum" / Int16ub,
+        "devid_devnum" / Int16ub,
         "direction" / Int32ub,
         "ep" / Int32ub
     )
@@ -228,7 +229,8 @@ class CmdDirection(enum.IntEnum):
 CmdCommonHdrTuple = (
     "command" / UBSIPCommandEnum,
     "seqnum" / Int32ub,
-    "devid" / Int32ub,
+    "devid_busnum" / Int16ub,
+    "devid_devnum" / Int16ub,
     "direction" / Int32ub,
     "ep" / Int32ub
 )
@@ -385,4 +387,11 @@ def cmd_ret_hdr(cmd_msg):
         ret_cmd = UBSIPCommandEnum.RET_SUBMIT
     elif cmd_msg.command == UBSIPCommandEnum.CMD_UNLINK:
         ret_cmd = UBSIPCommandEnum.RET_UNLINK
-    return {"command": ret_cmd, "seqnum": cmd_msg.seqnum, "devid": 0, "direction": 0, "ep": 0}
+    return {
+        "command": ret_cmd,
+        "seqnum": cmd_msg.seqnum,
+        "devid_busnum": 0,
+        "devid_devnum": 0,
+        "direction": 0,
+        "ep": 0,
+    }
