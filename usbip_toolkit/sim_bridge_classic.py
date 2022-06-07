@@ -56,8 +56,8 @@ class SimServer:
                 bufs = [bufs]
             obuf = bytearray()
             for buf in bufs:
-                obuf += len(buf).to_bytes(4, "big")
-                obuf += buf
+                smsg = len(buf).to_bytes(4, "big") + buf
+                obuf += smsg
                 print(f"h2d_raw: {buf.hex(' ')}", flush=True)
             self.client_sock.send(obuf)
             self.h2d_raw.task_done()
@@ -120,7 +120,7 @@ class USBIPSimBridgeServer_classic:
         self._frame_num = 0
         self._odd = False
         self.busnum = 47
-        self.devnum = 43
+        self.devnum = 6
         self._setup_addr_done = False
 
     def serve(self):
