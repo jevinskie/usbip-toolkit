@@ -8,6 +8,9 @@ from usbip_toolkit.proto import *
 from usbip_toolkit.usb import *
 from usbip_toolkit.util import get_tcp_server_socket
 
+real_print = print
+print = lambda *args, **kwargs: real_print(*args, **kwargs, flush=True)
+
 
 class SimServer:
     def __init__(self, d2h_raw: Queue, h2d_raw: Queue, port: int = 2443):
@@ -45,7 +48,7 @@ class SimServer:
             buf = self.client_sock.recv(nbytes)
             if not buf:
                 break
-            print(f"d2h_raw: {buf.hex(' ')}", flush=True)
+            print(f"d2h_raw: {buf.hex(' ')}")
             self.d2h_raw.put(buf)
         print("sim client closed socket")
 
@@ -58,7 +61,7 @@ class SimServer:
             for buf in bufs:
                 smsg = len(buf).to_bytes(4, "big") + buf
                 obuf += smsg
-                print(f"h2d_raw: {buf.hex(' ')}", flush=True)
+                print(f"h2d_raw: {buf.hex(' ')}")
             self.client_sock.send(obuf)
             self.h2d_raw.task_done()
 
@@ -230,14 +233,17 @@ class USBIPSimBridgeServer_classic:
             # data phase
             print("good good setup_resp, sending in token(s) to device")
             in_token = in_token_packet(urb.devid_devnum, ep)
+            ii = 0
             while len(setup_resp_data) < urb.body.transfer_buffer_length:
+                print(f"ii: {ii}")
+                ii += 1
                 self.h2d_raw.put(in_token)
                 full_buf = self.d2h_raw_pop()
                 # fixme check PID and CRC
                 buf = full_buf[1:-2]
                 setup_resp_data += buf
                 self.h2d_raw.put(ack_packet())
-                if buf == b"":
+                if len(buf) != 64:
                     break
         print(f"setup_resp_data: {setup_resp_data.hex(' ')}")
         # status phase
