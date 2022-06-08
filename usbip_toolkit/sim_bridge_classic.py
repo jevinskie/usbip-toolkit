@@ -8,8 +8,8 @@ from usbip_toolkit.proto import *
 from usbip_toolkit.usb import *
 from usbip_toolkit.util import get_tcp_server_socket
 
-real_print = print
-print = lambda *args, **kwargs: real_print(*args, **kwargs, flush=True)
+# real_print = print
+# print = lambda *args, **kwargs: real_print(*args, **kwargs, flush=True)
 
 
 class SimServer:
@@ -62,7 +62,9 @@ class SimServer:
                 smsg = len(buf).to_bytes(4, "big") + buf
                 obuf += smsg
                 print(f"h2d_raw: {buf.hex(' ')}")
-            self.client_sock.send(obuf)
+                # time.sleep(0.01)
+                self.client_sock.send(smsg)
+            # self.client_sock.send(obuf)
             self.h2d_raw.task_done()
 
 
@@ -96,7 +98,7 @@ class USBIPServer:
     def d2h_loop(self):
         while True:
             buf, smsg_ty = self.d2h_ip.get()
-            print(f"smsg_ty: {smsg_ty}")
+            print(f"d2h_ip sock write: smsg_ty: {smsg_ty}")
             self.client_sock.send(buf)
             self.d2h_ip.task_done()
 
@@ -105,7 +107,7 @@ class USBIPServer:
             cmsg, cmsg_ty = read_usbip_client_packet(self.client_sock)
             if cmsg is None:
                 break
-            print(f"cmsg_ty: {cmsg_ty} cmsg: {cmsg}")
+            print(f"h2d_ip sock read: cmsg_ty: {cmsg_ty} cmsg: {cmsg}")
             self.h2d_ip.put((cmsg, cmsg_ty))
         print("usbip client closed socket")
 
@@ -289,7 +291,6 @@ class USBIPSimBridgeServer_classic:
         raise NotImplementedError("interrrupt transfers not implemented")
 
     def handle_transfer(self, urb):
-        self.h2d_raw.put(sof_packet(self.frame_num))
         if urb.ep == 0:
             self.handle_control(urb)
         elif urb.body.number_of_packets:
@@ -300,7 +301,8 @@ class USBIPSimBridgeServer_classic:
             self.handle_bulk(urb)
 
     def send_urb_to_sim(self, urb):
-        print(f"submit: {urb}")
+        # print(f"submit: {urb}")
+        self.h2d_raw.put(sof_packet(self.frame_num))
         if not self._setup_addr_done:
             self.setup_addr()
         self.handle_transfer(urb)
