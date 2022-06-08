@@ -279,6 +279,9 @@ class USBIPSimBridgeServer_classic:
         )
         self.d2h_ip.put((smsg, USBIPServerPacketType.USBIPCommandReply))
 
+    def handle_bulk(self, urb):
+        raise NotImplementedError("soon son very son son")
+
     def handle_iso(self, urb):
         raise NotImplementedError("iso transfers not implemented")
 
@@ -289,7 +292,7 @@ class USBIPSimBridgeServer_classic:
         self.h2d_raw.put(sof_packet(self.frame_num))
         if urb.ep == 0:
             self.handle_control(urb)
-        elif urb.number_of_packets:
+        elif urb.body.number_of_packets:
             self.handle_iso(urb)
         elif False:  # no way to detect transfer type without endpoint descriptor parsing??
             self.handle_interrupt(urb)
