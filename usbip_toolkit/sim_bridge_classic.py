@@ -198,10 +198,32 @@ class USBIPSimBridgeServer_classic:
         self.h2d_raw.put(ack_packet())
         self._setup_addr_done = True
 
+    def handle_control(self, urb):
+        if len(urb.body.transfer_buffer):
+            raise NotImplementedError("setup packet with extra data? NYET!")
+
+    def handle_iso(self, urb):
+        raise NotImplementedError("iso transfers not implemented")
+
+    def handle_interrupt(self, urb):
+        raise NotImplementedError("interrrupt transfers not implemented")
+
+    def handle_transfer(self, urb):
+        self.h2d_raw.put(sof_packet(self.frame_num))
+        if urb.ep == 0:
+            self.handle_control(self, urb)
+        elif urb.number_of_packets:
+            self.handle_iso(self, urb)
+        elif False:  # no way to detect transfer type without endpoint descriptor parsing??
+            self.handle_interrupt(urb)
+        else:
+            self.handle_bulk(self, urb)
+
     def send_urb_to_sim(self, urb):
         print(f"submit: {urb}")
         if not self._setup_addr_done:
             self.setup_addr()
+        self.handle_transfer(urb)
         if urb.ep == 0:
             if len(urb.body.transfer_buffer):
                 raise NotImplementedError("setup packet with extra data?")
