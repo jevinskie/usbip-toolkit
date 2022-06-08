@@ -118,10 +118,20 @@ class USBIPSimBridgeServer_classic:
         self.sim_server = SimServer(self.d2h_raw, self.h2d_raw, sim_port)
         self.usbip_server = USBIPServer(self.d2h_ip, self.h2d_ip, usbip_port)
         self._frame_num = 0
-        self._odd = False
+        self._odds = [False] * USB_MAX_ENDPOINTS
         self.busnum = 47
         self.devnum = 6
         self._setup_addr_done = False
+
+    def d2h_raw_pop(self):
+        res = self.d2h_raw.get()
+        self.d2h_raw.task_done()
+        return res
+
+    def h2d_ip_pop(self):
+        res = self.h2d_ip.get()
+        self.h2d_ip.task_done()
+        return res
 
     def serve(self):
         print("server running")
@@ -129,7 +139,7 @@ class USBIPSimBridgeServer_classic:
         self.usbip_server.serve()
 
         while True:
-            cmsg, cmsg_ty = self.h2d_ip.get()
+            cmsg, cmsg_ty = self.h2d_ip_pop()
             if cmsg_ty == USBIPClientPacketType.USBIPOperationRequest:
                 if cmsg.code == UBSIPCode.REQ_IMPORT:
                     smsg = OpImportReply.build(
@@ -164,7 +174,6 @@ class USBIPSimBridgeServer_classic:
                 elif cmsg.command == UBSIPCommandEnum.CMD_UNLINK:
                     print("got unlink!")
                     break
-
         print("server done")
 
     @property
@@ -173,34 +182,88 @@ class USBIPSimBridgeServer_classic:
         self._frame_num = (res + 1) & ((1 << 11) - 1)
         return res
 
-    @property
-    def odd(self):
-        res = self._odd
-        self._odd = not res
+    def odd(self, endpoint):
+        res = self._odds[endpoint]
+        self._odds[endpoint] = not res
         return res
 
-    def reset_odd(self):
-        self._odd = False
+    def reset_odd(self, endpoint):
+        self._odds[endpoint] = False
 
     def setup_addr(self):
-        setup_token = setup_token_packet(0, 0)
+        dev = 0
+        ep = 0
+        setup_token = setup_token_packet(dev, ep)
         setup_data = setup_data_packet(Recip.DEVICE, Dir.OUT, Req.SET_ADDRESS, self.devnum, 0, 0)
-        self.reset_odd()
-        self.h2d_raw.put(
-            [sof_packet(self.frame_num), sof_packet(self.frame_num), setup_token, setup_data]
-        )
-        setup_resp = self.d2h_raw.get()
+        self.reset_odd(ep)
+        self.odd(ep)
+        self.h2d_raw.put([setup_token, setup_data])
+        setup_resp = self.d2h_raw_pop()
         assert setup_resp == ack_packet()
         in_token = in_token_packet(0, 0)
         self.h2d_raw.put([sof_packet(self.frame_num), in_token])
-        resp_data = self.d2h_raw.get()
-        print(f"setup_addr resp_data: {resp_data.hex(' ')}")
+        resp_data = self.d2h_raw_pop()
+        resp_data_gold = data_packet(b"", odd=self.odd(ep))
+        if resp_data != resp_data_gold:
+            raise ValueError(f"resp actual: {resp_data.hex(' ')} gold: {resp_data_gold.hex(' ')}")
         self.h2d_raw.put(ack_packet())
         self._setup_addr_done = True
 
     def handle_control(self, urb):
         if len(urb.body.transfer_buffer):
             raise NotImplementedError("setup packet with extra data? NYET!")
+        ep = 0
+        # setup phase
+        setup_token = setup_token_packet(urb.devid_devnum, ep)
+        self.reset_odd(ep)
+        setup_data = data_packet(urb.body.setup, odd=False)
+        self.h2d_raw.put([setup_token, setup_data])
+        setup_resp = self.d2h_raw_pop()
+        print(f"setup_resp: {setup_resp.hex()}")
+        if setup_resp != ack_packet():
+            print("got bad setup_resp")
+            smsg = RetSubmit.build({**cmd_ret_hdr(urb), "body": {"status": 1, "error_count": 1}})
+            self.d2h_ip.put((smsg, USBIPServerPacketType.USBIPCommandReply))
+            return
+        setup_resp_data = b""
+        if urb.body.transfer_buffer_length:
+            # data phase
+            print("good good setup_resp, sending in token(s) to device")
+            in_token = in_token_packet(urb.devid_devnum, ep)
+            while len(setup_resp_data) < urb.body.transfer_buffer_length:
+                self.h2d_raw.put(in_token)
+                full_buf = self.d2h_raw_pop()
+                # fixme check PID and CRC
+                buf = full_buf[1:-2]
+                setup_resp_data += buf
+                self.h2d_raw.put(ack_packet())
+                if buf == b"":
+                    break
+        print(f"setup_resp_data: {setup_resp_data.hex(' ')}")
+        # status phase
+        out_token = out_token_packet(urb.devid_devnum, ep)
+        status_zlp = data_packet(b"", odd=True)
+        self.h2d_raw.put([out_token, status_zlp])
+        self.reset_odd(ep)
+        status_resp = self.d2h_raw_pop()
+        print(f"status_resp: {status_resp.hex()}")
+        if status_resp != ack_packet():
+            print("got bad status_resp")
+            smsg = RetSubmit.build({**cmd_ret_hdr(urb), "body": {"status": 1, "error_count": 1}})
+            self.d2h_ip.put((smsg, USBIPServerPacketType.USBIPCommandReply))
+            return
+        smsg = RetSubmit.build(
+            {
+                **cmd_ret_hdr(urb),
+                "body": {
+                    "status": 0,
+                    "error_count": 0,
+                    "actual_length": len(setup_resp_data),
+                    "transfer_buffer": setup_resp_data,
+                },
+            }
+        )
+        self.d2h_ip.put((smsg, USBIPServerPacketType.USBIPCommandReply))
 
     def handle_iso(self, urb):
         raise NotImplementedError("iso transfers not implemented")
@@ -211,19 +274,20 @@ class USBIPSimBridgeServer_classic:
     def handle_transfer(self, urb):
         self.h2d_raw.put(sof_packet(self.frame_num))
         if urb.ep == 0:
-            self.handle_control(self, urb)
+            self.handle_control(urb)
         elif urb.number_of_packets:
-            self.handle_iso(self, urb)
+            self.handle_iso(urb)
         elif False:  # no way to detect transfer type without endpoint descriptor parsing??
             self.handle_interrupt(urb)
         else:
-            self.handle_bulk(self, urb)
+            self.handle_bulk(urb)
 
     def send_urb_to_sim(self, urb):
         print(f"submit: {urb}")
         if not self._setup_addr_done:
             self.setup_addr()
         self.handle_transfer(urb)
+        return
         if urb.ep == 0:
             if len(urb.body.transfer_buffer):
                 raise NotImplementedError("setup packet with extra data?")

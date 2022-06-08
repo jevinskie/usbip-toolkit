@@ -3,6 +3,7 @@ from enum import IntEnum
 from usbip_toolkit._tables import _crc16_table
 from usbip_toolkit.util import bit_reverse
 
+USB_MAX_ENDPOINTS = 32
 
 # fmt: off
 class PID(IntEnum):
