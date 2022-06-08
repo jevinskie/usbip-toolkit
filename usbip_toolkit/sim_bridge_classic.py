@@ -216,6 +216,7 @@ class USBIPSimBridgeServer_classic:
         if len(urb.body.transfer_buffer):
             raise NotImplementedError("setup packet with extra data? NYET!")
         ep = 0
+        is_in = urb.body.setup[0] & Dir.IN != 0
         # setup phase
         setup_token = setup_token_packet(urb.devid_devnum, ep)
         self.reset_odd(ep)
@@ -233,10 +234,7 @@ class USBIPSimBridgeServer_classic:
             # data phase
             print("good good setup_resp, sending in token(s) to device")
             in_token = in_token_packet(urb.devid_devnum, ep)
-            ii = 0
             while len(setup_resp_data) < urb.body.transfer_buffer_length:
-                print(f"ii: {ii}")
-                ii += 1
                 self.h2d_raw.put(in_token)
                 full_buf = self.d2h_raw_pop()
                 # fixme check PID and CRC
@@ -247,17 +245,27 @@ class USBIPSimBridgeServer_classic:
                     break
         print(f"setup_resp_data: {setup_resp_data.hex(' ')}")
         # status phase
-        out_token = out_token_packet(urb.devid_devnum, ep)
         status_zlp = data_packet(b"", odd=True)
-        self.h2d_raw.put([out_token, status_zlp])
-        self.reset_odd(ep)
-        status_resp = self.d2h_raw_pop()
-        print(f"status_resp: {status_resp.hex()}")
-        if status_resp != ack_packet():
-            print("got bad status_resp")
-            smsg = RetSubmit.build({**cmd_ret_hdr(urb), "body": {"status": 1, "error_count": 1}})
-            self.d2h_ip.put((smsg, USBIPServerPacketType.USBIPCommandReply))
-            return
+        if is_in:
+            out_token = out_token_packet(urb.devid_devnum, ep)
+            self.h2d_raw.put([out_token, status_zlp])
+            self.reset_odd(ep)
+            status_resp = self.d2h_raw_pop()
+            print(f"status_resp: {status_resp.hex()}")
+            if status_resp != ack_packet():
+                print("got bad status_resp")
+                smsg = RetSubmit.build(
+                    {**cmd_ret_hdr(urb), "body": {"status": 1, "error_count": 1}}
+                )
+                self.d2h_ip.put((smsg, USBIPServerPacketType.USBIPCommandReply))
+                return
+        else:
+            in_token = in_token_packet(urb.devid_devnum, ep)
+            self.h2d_raw.put(in_token)
+            zlp_resp = self.d2h_raw_pop()
+            if zlp_resp != status_zlp:
+                print(f"RUHROH: {zlp_resp} {status_zlp}")
+            self.h2d_raw.put(ack_packet())
         smsg = RetSubmit.build(
             {
                 **cmd_ret_hdr(urb),
