@@ -285,10 +285,12 @@ class USBIPSimBridgeServer_classic:
 
     def handle_bulk(self, urb):
         MAX_PKT_SZ = 512
-        is_in = urb.body.setup[0] & Dir.IN != 0
+        is_in = urb.direction == 1
+        print(f"urb dir: {Dir(urb.body.setup[0])} len: {urb.body.transfer_buffer_length}")
         if is_in:
-            ibuf = urb.transfer_buffer
             obuf = bytearray()
+        else:
+            ibuf = bytearray(urb.body.transfer_buffer)
         len_rem = urb.body.transfer_buffer_length
         while len_rem > 0:
             obufs = []
@@ -299,6 +301,7 @@ class USBIPSimBridgeServer_classic:
                 token_pkt = out_token_packet(urb.devid_devnum, urb.ep)
                 obufs.append(token_pkt)
                 buf = ibuf[:512]
+                print(f"z buf: {buf.hex(' ')}")
                 data_out_pkt = data_packet(buf, odd=self.odd(urb.ep))
                 obufs.append(data_out_pkt)
                 del ibuf[:512]
@@ -307,11 +310,26 @@ class USBIPSimBridgeServer_classic:
             if is_in:
                 resp_data_pkt = self.d2h_raw_pop()
                 # FIXME: check PID and CRC
-                obuf += resp_data_pkt[1:-2]
+                resp_data = resp_data_pkt[1:-2]
+                len_rem -= len(resp_data)
+                obuf += resp_data
                 self.h2d_raw.put(ack_packet())
             else:
                 resp = self.d2h_raw_pop()
                 assert resp == ack_packet()
+            print(f"len_rem: {len_rem}")
+        smsg = RetSubmit.build(
+            {
+                **cmd_ret_hdr(urb),
+                "body": {
+                    "status": 0,
+                    "error_count": 0,
+                    "actual_length": len(obuf) if is_in else 0,
+                    "transfer_buffer": obuf if is_in else b"",
+                },
+            }
+        )
+        self.d2h_ip.put((smsg, USBIPServerPacketType.USBIPCommandReply))
 
     def handle_iso(self, urb):
         raise NotImplementedError("iso transfers not implemented")

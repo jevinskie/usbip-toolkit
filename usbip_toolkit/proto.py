@@ -362,7 +362,7 @@ def read_usbip_client_packet(sock: socket.socket):
         body_ty = {
             UBSIPCommandEnum.CMD_SUBMIT: CmdSubmitBody,
             UBSIPCommandEnum.CMD_UNLINK: CmdUnlinkBody,
-        }
+        }[cmn_hdr.command]
         if body_ty is CmdSubmitBody:
             tbuf = sock.recv(8)
             if not tbuf:
