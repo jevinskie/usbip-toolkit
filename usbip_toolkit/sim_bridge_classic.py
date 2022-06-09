@@ -48,6 +48,8 @@ class SimServer:
             buf = self.client_sock.recv(nbytes)
             if not buf:
                 break
+            if all([b == 0 for b in buf]):
+                continue
             print(f"d2h_raw: {buf.hex(' ')}")
             self.d2h_raw.put(buf)
         print("sim client closed socket")
