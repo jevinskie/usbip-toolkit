@@ -48,7 +48,7 @@ class SimServer:
             buf = self.client_sock.recv(nbytes)
             if not buf:
                 break
-            if all([b == 0 for b in buf]):
+            if all([b == 0 for b in buf]) and len(buf) > 64:
                 continue
             print(f"d2h_raw: {buf.hex(' ')}")
             self.d2h_raw.put(buf)
@@ -284,7 +284,34 @@ class USBIPSimBridgeServer_classic:
         self.d2h_ip.put((smsg, USBIPServerPacketType.USBIPCommandReply))
 
     def handle_bulk(self, urb):
-        raise NotImplementedError("soon son very son son")
+        MAX_PKT_SZ = 512
+        is_in = urb.body.setup[0] & Dir.IN != 0
+        if is_in:
+            ibuf = urb.transfer_buffer
+            obuf = bytearray()
+        len_rem = urb.body.transfer_buffer_length
+        while len_rem > 0:
+            obufs = []
+            if is_in:
+                token_pkt = in_token_packet(urb.devid_devnum, urb.ep)
+                obufs.append(token_pkt)
+            else:
+                token_pkt = out_token_packet(urb.devid_devnum, urb.ep)
+                obufs.append(token_pkt)
+                buf = ibuf[:512]
+                data_out_pkt = data_packet(buf, odd=self.odd(urb.ep))
+                obufs.append(data_out_pkt)
+                del ibuf[:512]
+                len_rem -= len(buf)
+            self.h2d_raw.put(obufs)
+            if is_in:
+                resp_data_pkt = self.d2h_raw_pop()
+                # FIXME: check PID and CRC
+                obuf += resp_data_pkt[1:-2]
+                self.h2d_raw.put(ack_packet())
+            else:
+                resp = self.d2h_raw_pop()
+                assert resp == ack_packet()
 
     def handle_iso(self, urb):
         raise NotImplementedError("iso transfers not implemented")
