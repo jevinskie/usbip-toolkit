@@ -348,6 +348,7 @@ def read_usbip_client_packet(sock: socket.socket):
         if not body_buf:
             return None, None
         buf += body_buf
+        print(f"opreq in buf: {buf.hex(' ')}")
         res = OpRequest.parse(buf)
         rebuilt_buf = OpRequest.build(res)
         cpkt_ty = USBIPClientPacketType.USBIPOperationRequest
@@ -368,13 +369,16 @@ def read_usbip_client_packet(sock: socket.socket):
                 return None, None
             buf += tbuf
             transfer_len = int.from_bytes(tbuf[4:], "big")
+            print(f"transfer_len: {transfer_len}")
             pkt_sz = CmdCommonHdr.sizeof() + CmdSubmitBodyPrefix.sizeof() + transfer_len
         else:
             pkt_sz = CmdCommonHdr.sizeof() + CmdUnlinkBody.sizeof()
+        print(f"len(buf): {len(buf)} pkt_sz: {pkt_sz}")
         rest = sock.recv(pkt_sz - len(buf))
         if not rest:
             return None, None
         buf += rest
+        print(f"ipcmd in buf: {buf.hex(' ')}")
         res = USBIPCommandRequest.parse(buf)
         rebuilt_buf = USBIPCommandRequest.build(res)
         cpkt_ty = USBIPClientPacketType.USBIPCommandRequest
