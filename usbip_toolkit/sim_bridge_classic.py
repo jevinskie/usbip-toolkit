@@ -353,48 +353,6 @@ class USBIPSimBridgeServer_classic:
         if not self._setup_addr_done:
             self.setup_addr()
         self.handle_transfer(urb)
-        return
-        if urb.ep == 0:
-            if len(urb.body.transfer_buffer):
-                raise NotImplementedError("setup packet with extra data?")
-            setup_token = setup_token_packet(urb.devid_devnum, 0)
-            setup_data = data_packet(urb.body.setup, odd=False)
-            # setup_data = data_packet(bytes.fromhex("80 06 00 01 00 00 12 00"), odd=False)
-            self.reset_odd()
-            self.h2d_raw.put([sof_packet(self.frame_num), setup_token, setup_data])
-            setup_resp = self.d2h_raw.get()
-            print(f"setup_resp: {setup_resp.hex()}")
-            if setup_resp != ack_packet():
-                print("got bad setup_resp")
-                smsg = RetSubmit.build(
-                    {**cmd_ret_hdr(urb), "body": {"status": 1, "error_count": 1}}
-                )
-                self.d2h_ip.put((smsg, USBIPServerPacketType.USBIPCommandReply))
-            else:
-                print("good good setup_resp, sending in token to device")
-                in_token = in_token_packet(urb.devid_devnum, 0)
-                print(f"in_token: {in_token.hex()}")
-                self.h2d_raw.put([sof_packet(self.frame_num), in_token])
-                # fixme check PID and CRC
-                setup_resp_data = self.d2h_raw.get()[1:-2]
-                print(f"setup_resp_data: {setup_resp_data.hex(' ')}")
-                self.h2d_raw.put([ack_packet()])
-                smsg = RetSubmit.build(
-                    {
-                        **cmd_ret_hdr(urb),
-                        "body": {
-                            "status": 0,
-                            "error_count": 0,
-                            "actual_length": len(setup_resp_data),
-                            "transfer_buffer": setup_resp_data,
-                        },
-                    }
-                )
-                print("putting response in d2h_ip queue")
-                self.d2h_ip.put((smsg, USBIPServerPacketType.USBIPCommandReply))
-                print("done putting response in d2h_ip queue")
-        else:
-            raise NotImplementedError
 
 
 if __name__ == "__main__":
